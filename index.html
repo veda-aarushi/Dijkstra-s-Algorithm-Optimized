@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Dijkstra Visualizer (Optimized)</title>
+  <style>
+    body {
+      font-family: 'Segoe UI', sans-serif;
+    }
+  </style>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 min-h-screen p-8">
+  <div class="bg-white p-6 rounded-2xl shadow-lg max-w-6xl mx-auto space-y-6">
+    <h1 class="text-2xl font-bold text-center text-gray-800">Dijkstra's Algorithm with Visualization</h1>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div>
+        <label class="block font-semibold mb-2">Number of Nodes:</label>
+        <input type="number" id="nodeCount" min="2" value="5" class="w-full p-2 border rounded">
+        <button onclick="generateEdgeInputs()" class="mt-2 bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">Create Graph</button>
+
+        <div id="edgeInputs" class="mt-4 space-y-2"></div>
+
+        <label for="source" class="block font-semibold mt-4 mb-2">Source Node:</label>
+        <input type="number" id="source" min="0" value="0" class="w-full p-2 border rounded">
+
+        <button onclick="runDijkstra()" class="mt-4 bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700">Run Dijkstra</button>
+
+        <div>
+          <h2 class="text-lg font-semibold mt-4">Shortest Distances:</h2>
+          <pre id="result" class="bg-gray-100 p-4 rounded h-40 overflow-auto"></pre>
+        </div>
+      </div>
+
+      <div class="w-full h-[500px] bg-gray-50 border rounded">
+        <svg id="graphCanvas" width="100%" height="100%"></svg>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    function generateEdgeInputs() {
+      const nodeCount = parseInt(document.getElementById("nodeCount").value);
+      const edgeInputs = document.getElementById("edgeInputs");
+      edgeInputs.innerHTML = "";
+
+      const fragment = document.createDocumentFragment();
+
+      for (let i = 0; i < nodeCount; i++) {
+        for (let j = i + 1; j < nodeCount; j++) {
+          const container = document.createElement("div");
+          container.className = "flex items-center gap-4";
+
+          const label = document.createElement("span");
+          label.className = "w-24";
+          label.textContent = `Edge ${i} → ${j}:`;
+
+          const input = document.createElement("input");
+          input.type = "number";
+          input.min = "0";
+          input.placeholder = "Weight";
+          input.className = "flex-1 p-2 border rounded";
+          input.setAttribute("data-edge", `${i}-${j}`);
+
+          container.appendChild(label);
+          container.appendChild(input);
+          fragment.appendChild(container);
+        }
+      }
+
+      edgeInputs.appendChild(fragment);
+      drawGraph(nodeCount, []);
+    }
+
+    function runDijkstra() {
+      const nodeCount = parseInt(document.getElementById("nodeCount").value);
+      const source = parseInt(document.getElementById("source").value);
+      const inputs = document.querySelectorAll("#edgeInputs input");
+      const resultBox = document.getElementById("result");
+
+      const adjList = Array.from({ length: nodeCount }, () => []);
+      const edges = [];
+
+      inputs.forEach(input => {
+        const [i, j] = input.dataset.edge.split("-").map(Number);
+        const weight = parseInt(input.value);
+        if (!isNaN(weight)) {
+          adjList[i].push({ node: j, weight });
+          adjList[j].push({ node: i, weight });
+          edges.push({ from: i, to: j, weight });
+        }
+      });
+
+      const dist = Array(nodeCount).fill(Infinity);
+      const prev = Array(nodeCount).fill(null);
+      dist[source] = 0;
+
+      const pq = new MinHeap();
+      pq.push({ node: source, dist: 0 });
+
+      while (!pq.isEmpty()) {
+        const { node: u, dist: d } = pq.pop();
+        if (d > dist[u]) continue;
+
+        for (const neighbor of adjList[u]) {
+          const v = neighbor.node;
+          const w = neighbor.weight;
+          if (dist[u] + w < dist[v]) {
+            dist[v] = dist[u] + w;
+            prev[v] = u;
+            pq.push({ node: v, dist: dist[v] });
+          }
+        }
+      }
+
+      let result = '';
+      for (let i = 0; i < nodeCount; i++) {
+        result += `From node ${source} to ${i}: ${dist[i] === Infinity ? '∞' : dist[i]}\n`;
+      }
+      resultBox.textContent = result;
+
+      const highlightEdges = [];
+      for (let i = 0; i < nodeCount; i++) {
+        if (prev[i] !== null) {
+          highlightEdges.push({ from: prev[i], to: i, weight: dist[i] - dist[prev[i]] });
+        }
+      }
+
+      drawGraph(nodeCount, edges, highlightEdges);
+    }
+
+    class MinHeap {
+      constructor() {
+        this.heap = [];
+      }
+
+      push(item) {
+        this.heap.push(item);
+        this.bubbleUp();
+      }
+
+      pop() {
+        const top = this.heap[0];
+        const end = this.heap.pop();
+        if (this.heap.length > 0) {
+          this.heap[0] = end;
+          this.bubbleDown();
+        }
+        return top;
+      }
+
+      isEmpty() {
+        return this.heap.length === 0;
+      }
+
+      bubbleUp() {
+        let i = this.heap.length - 1;
+        while (i > 0) {
+          let p = Math.floor((i - 1) / 2);
+          if (this.heap[i].dist >= this.heap[p].dist) break;
+          [this.heap[i], this.heap[p]] = [this.heap[p], this.heap[i]];
+          i = p;
+        }
+      }
+
+      bubbleDown() {
+        let i = 0;
+        const length = this.heap.length;
+        while (true) {
+          let left = 2 * i + 1;
+          let right = 2 * i + 2;
+          let smallest = i;
+
+          if (left < length && this.heap[left].dist < this.heap[smallest].dist) smallest = left;
+          if (right < length && this.heap[right].dist < this.heap[smallest].dist) smallest = right;
+
+          if (smallest === i) break;
+          [this.heap[i], this.heap[smallest]] = [this.heap[smallest], this.heap[i]];
+          i = smallest;
+        }
+      }
+    }
+
+    function drawGraph(nodeCount, edges, highlightEdges = []) {
+      const svg = document.getElementById("graphCanvas");
+      svg.innerHTML = "";
+
+      const centerX = 250;
+      const centerY = 250;
+      const radius = 180;
+
+      const positions = Array.from({ length: nodeCount }).map((_, i) => {
+        const angle = (2 * Math.PI * i) / nodeCount;
+        return {
+          x: centerX + radius * Math.cos(angle),
+          y: centerY + radius * Math.sin(angle),
+        };
+      });
+
+      edges.forEach(({ from, to, weight }) => {
+        const p1 = positions[from];
+        const p2 = positions[to];
+
+        const isHighlighted = highlightEdges.some(e =>
+          (e.from === from && e.to === to) ||
+          (e.from === to && e.to === from)
+        );
+
+        const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
+        line.setAttribute("x1", p1.x);
+        line.setAttribute("y1", p1.y);
+        line.setAttribute("x2", p2.x);
+        line.setAttribute("y2", p2.y);
+        line.setAttribute("stroke", isHighlighted ? "green" : "#ccc");
+        line.setAttribute("stroke-width", isHighlighted ? 3 : 1);
+        svg.appendChild(line);
+
+        const label = document.createElementNS("http://www.w3.org/2000/svg", "text");
+        label.setAttribute("x", (p1.x + p2.x) / 2);
+        label.setAttribute("y", (p1.y + p2.y) / 2 - 5);
+        label.setAttribute("text-anchor", "middle");
+        label.setAttribute("font-size", "14");
+        label.setAttribute("fill", "#333");
+        label.textContent = weight;
+        svg.appendChild(label);
+      });
+
+      positions.forEach(({ x, y }, i) => {
+        const circle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+        circle.setAttribute("cx", x);
+        circle.setAttribute("cy", y);
+        circle.setAttribute("r", 20);
+        circle.setAttribute("fill", "#4F46E5");
+        svg.appendChild(circle);
+
+        const text = document.createElementNS("http://www.w3.org/2000/svg", "text");
+        text.setAttribute("x", x);
+        text.setAttribute("y", y + 5);
+        text.setAttribute("text-anchor", "middle");
+        text.setAttribute("font-size", "16");
+        text.setAttribute("fill", "white");
+        text.textContent = i;
+        svg.appendChild(text);
+      });
+    }
+  </script>
+</body>
+</html>
